@@ -5,8 +5,8 @@ import { prisma } from "@/lib/prisma";
 import config from "@/lib/config";
 
 // Helper: check MuAPI and sync DB for a processing record
-async function syncProcessingRecord(record) {
-  const apiKey = config.ai.apiKey;
+async function syncProcessingRecord(record, customApiKey = null) {
+  const apiKey = (customApiKey && customApiKey.trim().length > 0) ? customApiKey.trim() : config.ai.apiKey;
   if (apiKey && !apiKey.includes("your_") && !record.requestId.startsWith("mock_")) {
     try {
       const pollRes = await fetch(
@@ -53,6 +53,9 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
+    const headerApiKey = req.headers.get("x-custom-api-key");
+    const customApiKey = headerApiKey || session.user.customApiKey || null;
+
     // Single record fetch
     if (id) {
       let record = await prisma.roomDeclutter.findFirst({
@@ -62,7 +65,7 @@ export async function GET(req) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
       if (record.status === "processing") {
-        record = await syncProcessingRecord(record);
+        record = await syncProcessingRecord(record, customApiKey);
       }
       return NextResponse.json(record);
     }
@@ -76,7 +79,7 @@ export async function GET(req) {
     // Self-heal processing records
     const synced = await Promise.all(
       records.map((r) =>
-        r.status === "processing" ? syncProcessingRecord(r) : r
+        r.status === "processing" ? syncProcessingRecord(r, customApiKey) : r
       )
     );
 

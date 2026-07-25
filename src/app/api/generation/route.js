@@ -47,17 +47,24 @@ export async function POST(req) {
       return new NextResponse("Prompt is required", { status: 400 });
     }
 
-    // 1. Deduct credits based on model name and resolution
+    const headerApiKey = req.headers.get("x-custom-api-key");
+    const customApiKey = headerApiKey || body.customApiKey || session.user.customApiKey || null;
+    const isUsingCustomKey = Boolean(customApiKey && customApiKey.trim().length > 0);
+
+    // Deduct credits based on model name and resolution (0 if custom API key active)
     const modelCosts = (config.ai.generationCost && config.ai.generationCost[modelName]) || { "1k": 12, "2k": 18, "4k": 24 };
-    const cost = modelCosts[resolution] || 12;
-    try {
-      await UserService.deductCredits(session.user.id, cost);
-    } catch (e) {
-      return new NextResponse("Insufficient credits", { status: 402 });
+    const cost = isUsingCustomKey ? 0 : (modelCosts[resolution] || 12);
+
+    if (!isUsingCustomKey && cost > 0) {
+      try {
+        await UserService.deductCredits(session.user.id, cost);
+      } catch (e) {
+        return new NextResponse("Insufficient credits", { status: 402 });
+      }
     }
 
-    // 2. Submit to MuAPI
-    const apiKey = config.ai.apiKey;
+    // Submit to MuAPI
+    const apiKey = isUsingCustomKey ? customApiKey.trim() : config.ai.apiKey;
     let resultImage = "";
     let requestId = `mock_${Date.now()}`;
     let status = "processing";
@@ -167,17 +174,19 @@ export async function POST(req) {
       status = "completed";
     }
 
-    // Refund credits on immediate failure
+    // Refund credits on immediate failure (only if credits were deducted)
     if (status === "failed") {
-      try {
-        await UserService.addCredits(session.user.id, cost);
-      } catch (refundErr) {
-        console.error("Failed to refund credits:", refundErr);
+      if (!isUsingCustomKey && cost > 0) {
+        try {
+          await UserService.addCredits(session.user.id, cost);
+        } catch (refundErr) {
+          console.error("Failed to refund credits:", refundErr);
+        }
       }
       return NextResponse.json({ error: "Prediction failed" }, { status: 500 });
     }
 
-    // 3. Save to DB
+    // Save to DB
     const record = await prisma.roomDeclutter.create({
       data: {
         userId: session.user.id,

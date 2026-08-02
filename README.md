@@ -17,6 +17,11 @@
 
 https://github.com/user-attachments/assets/a834419c-70d9-49c6-9645-2854ef25b0ff
 
+## Related Projects
+
+- [MuAPI image playground](https://muapi.ai/playground) — Try image-editing models for room redesign workflows.
+- [MuAPI specialized apps docs](https://muapi.ai/docs/specialized-apps) — Image transformation and enhancement workflows.
+
 ## 🌐 Project Details
 
 **GitHub Repository:** [github.com/SamurAIGPT/ai-room-declutter](https://github.com/SamurAIGPT/ai-room-declutter)
